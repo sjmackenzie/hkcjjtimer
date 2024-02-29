@@ -270,9 +270,13 @@ impl eframe::App for CjjTimer {
                     if ui.button("Engaged").clicked() {
                         self.change(Event::Engage);
                     }
-                    if ui.button("Pause").clicked() {
-                        self.change(Event::Pause);
-                    }
+
+                    ui.separator();
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                        if ui.button("Pause").clicked() {
+                            self.change(Event::Pause);
+                        }
+                    });
                 }
                 State::Engaged => {
                     if (self.total_regulation_duration + self.start_regulation_instant.elapsed())
@@ -301,12 +305,15 @@ impl eframe::App for CjjTimer {
                     if ui.button("Not Engaged").clicked() {
                         self.change(Event::Separate);
                     }
-                    if ui.button("Pause").clicked() {
-                        self.change(Event::Pause);
-                    }
-                    if ui.button("Submission").clicked() {
-                        self.change(Event::Submission);
-                    }
+                    ui.separator();
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                        if ui.button("Pause").clicked() {
+                            self.change(Event::Pause);
+                        }
+                        if ui.button("Submission").clicked() {
+                            self.change(Event::Submission);
+                        }
+                    });
                 }
                 State::Paused => {
                     ui.label("Match is PAUSED".to_string());
@@ -331,9 +338,12 @@ impl eframe::App for CjjTimer {
                             self.total_non_engaged_duration.as_secs()
                         ));
                     }
-                    if ui.button("Restart").clicked() {
-                        self.change(Event::Restart);
-                    }
+                    ui.separator();
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                        if ui.button("Restart").clicked() {
+                            self.change(Event::Restart);
+                        }
+                    });
                 }
                 State::Restarted => {
                     ui.label("Match is RESTARTED".to_string());
@@ -370,15 +380,16 @@ impl eframe::App for CjjTimer {
                 "Source code."
             ));
 
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
+            //ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            //    powered_by_egui_and_eframe(ui);
+            //    egui::warn_if_debug_build(ui);
+            //});
         });
         ctx.request_repaint_after(Duration::from_secs(1));
     }
 }
 
+#[allow(dead_code)]
 fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
