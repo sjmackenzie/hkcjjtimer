@@ -10,6 +10,7 @@ rust-version = "1.72"
 wasm-rs-async-executor = { version = "0.9.0", features = ["cooperative"] }
 web-time = "1.0.0"
 egui = "0.26.0"
+#egui_extras = "0.26.0"
 eframe = { version = "0.26.0", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
