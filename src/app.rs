@@ -1,8 +1,6 @@
-//use core::time::Duration;
-//use std::time::Instant;
 use web_time::{Duration, Instant};
 
-const MT: u64 = 20;
+const MT: u64 = 10;
 const PFT: u64 = MT / 2;
 const HPFT: u64 = PFT / 2;
 
@@ -25,7 +23,11 @@ pub struct CjjTimer {
     #[serde(skip)]
     total_regulation_duration: Duration,
     #[serde(skip)]
+    regulation_input: u64,
+    #[serde(skip)]
     regulation_duration: Duration,
+    #[serde(skip)]
+    penalty_free_input: u64,
     #[serde(skip)]
     penalty_free_duration: Duration,
     #[serde(skip)]
@@ -35,7 +37,7 @@ pub struct CjjTimer {
     #[serde(skip)]
     over_time: bool,
     #[serde(skip)]
-    state: State,
+    state: RegulationState,
     #[serde(skip)]
     label: String,
     #[serde(skip)]
@@ -49,12 +51,14 @@ impl Default for CjjTimer {
             total_non_engaged_duration: Duration::from_secs(0),
             start_regulation_instant: Instant::now(),
             total_regulation_duration: Duration::from_secs(0),
+            regulation_input: MT,
             regulation_duration: Duration::from_secs(MT),
+            penalty_free_input: PFT,
             penalty_free_duration: Duration::from_secs(PFT),
             total_penalty_duration: Duration::from_secs(0),
             half_penalty_free_duration: Duration::from_secs(HPFT),
             over_time: false,
-            state: State::None,
+            state: RegulationState::None,
             label: "Hello World!".to_owned(),
             value: 2.7,
         }
@@ -76,7 +80,7 @@ impl CjjTimer {
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum State {
+enum RegulationState {
     Start,
     Restarted,
     NotEngaged,
@@ -88,7 +92,7 @@ enum State {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-enum Event {
+enum RegulationTransition {
     Start,
     Restart,
     Pause,
@@ -99,42 +103,48 @@ enum Event {
 }
 
 impl CjjTimer {
-    fn change_regulation_state(&self, event: Event) -> State {
+    fn change_regulation_state(&self, event: RegulationTransition) -> RegulationState {
         match (self.state, event) {
-            (State::None, Event::Start) => State::Start,
-            (State::Restarted, Event::Start) => State::Start,
+            (RegulationState::None, RegulationTransition::Start) => RegulationState::Start,
+            (RegulationState::Restarted, RegulationTransition::Start) => RegulationState::Start,
 
-            (State::Start, Event::Separate)
-            | (State::Paused, Event::Separate)
-            | (State::Engaged, Event::Separate) => State::NotEngaged,
-
-            (State::NotEngaged, Event::Engage) => State::Engaged,
-
-            (State::Engaged, Event::Pause) | (State::NotEngaged, Event::Pause) => State::Paused,
-
-            (State::Engaged, Event::Submission) => State::End,
-
-            (State::Engaged, Event::TimeExpire) | (State::NotEngaged, Event::TimeExpire) => {
-                State::Overtime
+            (RegulationState::Start, RegulationTransition::Separate)
+            | (RegulationState::Paused, RegulationTransition::Separate)
+            | (RegulationState::Engaged, RegulationTransition::Separate) => {
+                RegulationState::NotEngaged
             }
 
-            (State::End, Event::Restart) => State::Restarted,
-            (State::Overtime, Event::Restart) => State::Restarted,
-            _ => State::None,
+            (RegulationState::NotEngaged, RegulationTransition::Engage) => RegulationState::Engaged,
+
+            (RegulationState::Engaged, RegulationTransition::Pause)
+            | (RegulationState::NotEngaged, RegulationTransition::Pause) => RegulationState::Paused,
+
+            (RegulationState::Engaged, RegulationTransition::Submission) => RegulationState::End,
+
+            (RegulationState::Engaged, RegulationTransition::TimeExpire)
+            | (RegulationState::NotEngaged, RegulationTransition::TimeExpire) => {
+                RegulationState::Overtime
+            }
+
+            (RegulationState::End, RegulationTransition::Restart) => RegulationState::Restarted,
+            (RegulationState::Overtime, RegulationTransition::Restart) => {
+                RegulationState::Restarted
+            }
+            _ => RegulationState::None,
         }
     }
 
-    fn input(&self, event: Event) -> Event {
-        if let State::Start = self.state {
-            return Event::Separate;
+    fn input(&self, event: RegulationTransition) -> RegulationTransition {
+        if let RegulationState::Start = self.state {
+            return RegulationTransition::Separate;
         }
         if let (true, s) = (self.over_time, self.state) {
             match s {
-                State::Engaged => {
-                    return Event::TimeExpire;
+                RegulationState::Engaged => {
+                    return RegulationTransition::TimeExpire;
                 }
-                State::NotEngaged => {
-                    return Event::TimeExpire;
+                RegulationState::NotEngaged => {
+                    return RegulationTransition::TimeExpire;
                 }
                 _ => {
                     return event;
@@ -144,48 +154,47 @@ impl CjjTimer {
         event
     }
 
-    fn change(&mut self, event: Event) {
+    fn change(&mut self, event: RegulationTransition) {
         let new_state = self.change_regulation_state(self.input(event));
         match new_state {
-            State::Start => {
+            RegulationState::Start => {
                 self.over_time = false;
                 self.start_non_engaged_instant = Instant::now();
                 self.total_non_engaged_duration = Duration::from_secs(0);
                 self.start_regulation_instant = Instant::now();
                 self.total_regulation_duration = Duration::from_secs(0);
-                self.regulation_duration = Duration::from_secs(MT);
-                self.penalty_free_duration = Duration::from_secs(PFT);
                 self.total_penalty_duration = Duration::from_secs(0);
+                self.half_penalty_free_duration = Duration::from_secs(self.penalty_free_input / 2);
             }
-            State::NotEngaged => {
-                if State::Paused != self.state {
+            RegulationState::NotEngaged => {
+                if RegulationState::Paused != self.state {
                     self.total_regulation_duration += self.start_regulation_instant.elapsed();
                 }
                 self.start_regulation_instant = Instant::now();
                 self.start_non_engaged_instant = Instant::now();
             }
-            State::Engaged => {
+            RegulationState::Engaged => {
                 self.total_regulation_duration += self.start_regulation_instant.elapsed();
                 self.total_non_engaged_duration += self.start_non_engaged_instant.elapsed();
                 self.start_regulation_instant = Instant::now();
                 self.start_non_engaged_instant = Instant::now();
             }
-            State::Paused => {
-                if State::Engaged == self.state {
+            RegulationState::Paused => {
+                if RegulationState::Engaged == self.state {
                     self.total_regulation_duration += self.start_regulation_instant.elapsed();
                     self.start_non_engaged_instant = Instant::now();
                     self.start_regulation_instant = Instant::now();
                 }
-                if State::NotEngaged == self.state {
+                if RegulationState::NotEngaged == self.state {
                     self.total_regulation_duration += self.start_regulation_instant.elapsed();
                     self.total_non_engaged_duration += self.start_non_engaged_instant.elapsed();
                     self.start_non_engaged_instant = Instant::now();
                     self.start_regulation_instant = Instant::now();
                 }
             }
-            State::Overtime => {
+            RegulationState::Overtime => {
                 self.total_regulation_duration += self.start_regulation_instant.elapsed();
-                if State::NotEngaged == self.state {
+                if RegulationState::NotEngaged == self.state {
                     self.total_non_engaged_duration += self.start_non_engaged_instant.elapsed();
                 }
                 if self.total_non_engaged_duration > self.penalty_free_duration {
@@ -193,12 +202,31 @@ impl CjjTimer {
                         self.total_non_engaged_duration - self.penalty_free_duration;
                 }
             }
-            State::Restarted => {}
-            State::End => {}
-            State::None => {}
+            RegulationState::Restarted => {}
+            RegulationState::End => {}
+            RegulationState::None => {}
         }
         self.state = new_state;
     }
+}
+
+fn integer_edit_field(
+    ui: &mut egui::Ui,
+    value: &mut u64,
+    duration: &mut Duration,
+) -> egui::Response {
+    let mut tmp_value = format!("{:?}", value);
+    let res = ui.text_edit_singleline(&mut tmp_value);
+    if let Ok(result) = tmp_value.parse() {
+        *value = result;
+        *duration = Duration::from_secs(*value);
+    }
+    res
+}
+fn format_time(label: &str, duration: Duration) -> String {
+    let seconds = duration.as_secs() % 60;
+    let minutes = (duration.as_secs() / 60) % 60;
+    format!("{}: {:02}:{:02}", label, minutes, seconds)
 }
 
 impl eframe::App for CjjTimer {
@@ -241,7 +269,7 @@ impl eframe::App for CjjTimer {
             );
             ui.heading("Hong Kong Combat Jiu Jitsu Timer");
             let current_non_engaged_time = match self.state {
-                State::NotEngaged => {
+                RegulationState::NotEngaged => {
                     self.total_non_engaged_duration + self.start_non_engaged_instant.elapsed()
                 }
                 _ => self.total_non_engaged_duration,
@@ -258,167 +286,167 @@ impl eframe::App for CjjTimer {
                 MatchStage::Penalty
             };
             match self.state {
-                State::Start => {
-                    self.change(Event::Separate);
+                RegulationState::Start => {
+                    self.change(RegulationTransition::Separate);
                 }
-                State::NotEngaged => {
+                RegulationState::NotEngaged => {
                     if (self.total_regulation_duration + self.start_regulation_instant.elapsed())
                         >= self.regulation_duration
                     {
-                        self.change(Event::TimeExpire);
+                        self.change(RegulationTransition::TimeExpire);
                     }
                     ui.label("Fighters are NOT ENGAGED".to_string());
-                    ui.label(format!(
-                        "Match Time: {:?}",
-                        (self.total_regulation_duration + self.start_regulation_instant.elapsed())
-                            .as_secs()
+                    ui.label(format_time(
+                        "Match Time",
+                        self.total_regulation_duration + self.start_regulation_instant.elapsed(),
                     ));
                     match match_stage {
                         MatchStage::FirstHalfPenaltyFree => {
                             ui.colored_label(
                                 egui::Color32::GREEN,
-                                format!(
-                                    "First Half Penalty Free Time: {}",
-                                    (self.total_non_engaged_duration
-                                        + self.start_non_engaged_instant.elapsed())
-                                    .as_secs()
+                                format_time(
+                                    "1st Penalty Free Time",
+                                    self.total_non_engaged_duration
+                                        + self.start_non_engaged_instant.elapsed(),
                                 ),
                             );
                         }
                         MatchStage::SecondHalfPenaltyFree => {
                             ui.colored_label(
                                 egui::Color32::KHAKI,
-                                format!(
-                                    "Second Half Penalty Free Time: {}",
-                                    (self.total_non_engaged_duration
-                                        + self.start_non_engaged_instant.elapsed())
-                                    .as_secs()
+                                format_time(
+                                    "2nd Penalty Free Time",
+                                    self.total_non_engaged_duration
+                                        + self.start_non_engaged_instant.elapsed(),
                                 ),
                             );
                         }
                         MatchStage::Penalty => {
                             ui.colored_label(
                                 egui::Color32::RED,
-                                format!(
-                                    "Penalty Time: {}",
-                                    (self.total_non_engaged_duration
+                                format_time(
+                                    "Penalty Time",
+                                    self.total_non_engaged_duration
                                         + self.start_non_engaged_instant.elapsed()
-                                        - self.penalty_free_duration)
-                                        .as_secs()
+                                        - self.penalty_free_duration,
                                 ),
                             );
                         }
                     };
                     if ui.button("Engaged").clicked() {
-                        self.change(Event::Engage);
+                        self.change(RegulationTransition::Engage);
                     }
 
                     ui.separator();
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         if ui.button("Pause").clicked() {
-                            self.change(Event::Pause);
+                            self.change(RegulationTransition::Pause);
                         }
                     });
                 }
-                State::Engaged => {
+                RegulationState::Engaged => {
                     if (self.total_regulation_duration + self.start_regulation_instant.elapsed())
                         >= self.regulation_duration
                     {
-                        self.change(Event::TimeExpire);
+                        self.change(RegulationTransition::TimeExpire);
                     }
                     ui.label("Fighters are ENGAGED".to_string());
-                    ui.label(format!(
-                        "Match Time: {:?}",
-                        (self.total_regulation_duration + self.start_regulation_instant.elapsed())
-                            .as_secs()
+                    ui.label(format_time(
+                        "Match Time",
+                        self.total_regulation_duration + self.start_regulation_instant.elapsed(),
                     ));
                     match match_stage {
                         MatchStage::FirstHalfPenaltyFree => {
                             ui.colored_label(
                                 egui::Color32::GREEN,
-                                format!(
-                                    "First Half Penalty Free Time: {}",
-                                    self.total_non_engaged_duration.as_secs()
+                                format_time(
+                                    "1st Penalty Free Time",
+                                    self.total_non_engaged_duration,
                                 ),
                             );
                         }
                         MatchStage::SecondHalfPenaltyFree => {
                             ui.colored_label(
                                 egui::Color32::KHAKI,
-                                format!(
-                                    "Second Half Penalty Free Time: {}",
-                                    self.total_non_engaged_duration.as_secs()
+                                format_time(
+                                    "2nd Penalty Free Time",
+                                    self.total_non_engaged_duration,
                                 ),
                             );
                         }
                         MatchStage::Penalty => {
                             ui.colored_label(
                                 egui::Color32::RED,
-                                format!(
-                                    "Penalty Time: {}",
-                                    (self.total_non_engaged_duration - self.penalty_free_duration)
-                                        .as_secs()
+                                format_time(
+                                    "Penalty Time",
+                                    self.total_non_engaged_duration - self.penalty_free_duration,
                                 ),
                             );
                         }
                     };
                     if ui.button("Not Engaged").clicked() {
-                        self.change(Event::Separate);
+                        self.change(RegulationTransition::Separate);
                     }
                     ui.separator();
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         if ui.button("Pause").clicked() {
-                            self.change(Event::Pause);
+                            self.change(RegulationTransition::Pause);
                         }
                         if ui.button("Submission").clicked() {
-                            self.change(Event::Submission);
+                            self.change(RegulationTransition::Submission);
                         }
                     });
                 }
-                State::Paused => {
+                RegulationState::Paused => {
                     ui.label("Match is PAUSED".to_string());
                     if ui.button("Not Engaged").clicked() {
-                        self.change(Event::Separate);
+                        self.change(RegulationTransition::Separate);
                     }
                 }
-                State::Overtime => {
+                RegulationState::Overtime => {
                     ui.label("Match is OVERTIME".to_string());
-                    ui.label(format!(
-                        "Total Match Time: {:?}",
-                        (self.total_regulation_duration)
+                    ui.label(format_time(
+                        "Total Match Time",
+                        self.total_regulation_duration,
                     ));
-
-                    ui.label(format!("Penalty Time: {:?}", self.total_penalty_duration));
+                    ui.label(format_time("Penalty Time", self.total_penalty_duration));
                     ui.separator();
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         if ui.button("Restart").clicked() {
-                            self.change(Event::Restart);
+                            self.change(RegulationTransition::Restart);
                         }
                     });
                 }
-                State::Restarted => {
+                RegulationState::Restarted => {
                     ui.label("Match is RESTARTED".to_string());
                     if ui.button("Start").clicked() {
-                        self.change(Event::Start);
+                        self.change(RegulationTransition::Start);
                     }
                 }
-                State::End => {
+                RegulationState::End => {
                     ui.label("Match ended in SUBMISSION".to_string());
                     if ui.button("Restart").clicked() {
-                        self.change(Event::Restart);
+                        self.change(RegulationTransition::Restart);
                     }
                 }
-                State::None => {
-                    ui.label(format!(
-                        "Total Match Time: {:?}",
-                        (self.total_regulation_duration).as_secs()
-                    ));
-                    ui.label(format!(
-                        "Total Overtime: {:?}",
-                        (self.total_non_engaged_duration).as_secs()
+                RegulationState::None => {
+                    integer_edit_field(
+                        ui,
+                        &mut self.regulation_input,
+                        &mut self.regulation_duration,
+                    );
+                    integer_edit_field(
+                        ui,
+                        &mut self.penalty_free_input,
+                        &mut self.penalty_free_duration,
+                    );
+                    ui.label(format_time("Match Time", self.regulation_duration));
+                    ui.label(format_time(
+                        "Penalty Free Time",
+                        self.total_penalty_duration,
                     ));
                     if ui.button("Start").clicked() {
-                        self.change(Event::Start);
+                        self.change(RegulationTransition::Start);
                     }
                 }
             }
