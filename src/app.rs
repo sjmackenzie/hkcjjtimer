@@ -53,10 +53,6 @@ pub struct CjjTimer {
     overtime_segments: Vec<Segment>,
     #[serde(skip)]
     winner: Option<Fighter>,
-    #[serde(skip)]
-    label: String,
-    #[serde(skip)]
-    value: f32,
 }
 
 #[derive(Debug)]
@@ -87,8 +83,6 @@ impl Default for CjjTimer {
             overtime_state: OvertimeState::AdvanceOvertime,
             overtime_segments: vec![],
             winner: None,
-            label: "Hello World!".to_owned(),
-            value: 2.7,
         }
     }
 }
@@ -650,15 +644,18 @@ impl eframe::App for CjjTimer {
                         &mut self.regulation_input,
                         &mut self.regulation_duration,
                     );
+                    ui.label("as seconds".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.penalty_free_input,
                         &mut self.penalty_free_duration,
                     );
+                    ui.label("as seconds".to_string());
+                    ui.separator();
                     ui.label(format_time("Match Time", self.regulation_duration));
                     ui.label(format_time(
-                        "Penalty Free Time",
-                        self.total_penalty_duration,
+                        "Penalty Free Duration",
+                        self.penalty_free_duration,
                     ));
                     if ui.button("Start").clicked() {
                         self.change_regulation(Transition::StartRegulation);
