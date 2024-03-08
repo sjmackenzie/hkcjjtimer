@@ -37,7 +37,7 @@ fn main() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(hkcjjtimer::CjjTimer::new(cc))),
+                Box::new(|cc| Box::new(hkcjj_timer::CjjTimer::new(cc))),
             )
             .await
             .expect("failed to start eframe");

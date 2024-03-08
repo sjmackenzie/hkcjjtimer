@@ -2,8 +2,8 @@ var cacheName = 'egui-template-pwa';
 var filesToCache = [
   './',
   './index.html',
-  './hkcjjtimer.js',
-  './hkcjjtimer_bg.wasm',
+  './hkcjj_timer.js',
+  './hkcjj_timer_bg.wasm',
 ];
 
 /* Start the service worker and cache all of the app's content */
