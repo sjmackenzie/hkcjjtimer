@@ -20,7 +20,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "eframe template",
         native_options,
-        Box::new(|cc| Box::new(hkcjjtimer::CjjTimer::new(cc))),
+        Box::new(|cc| Box::new(hkcjj_timer::CjjTimer::new(cc))),
     )
 }
 
