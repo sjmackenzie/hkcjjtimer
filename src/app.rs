@@ -159,13 +159,13 @@ impl CjjTimer {
 
             (RegulationState::NotEngaged, Transition::Engage) => RegulationState::Engaged,
 
-            (RegulationState::Engaged, Transition::Pause) | (RegulationState::NotEngaged, Transition::Pause) => RegulationState::Paused,
+            (RegulationState::Engaged, Transition::Pause)
+            | (RegulationState::NotEngaged, Transition::Pause) => RegulationState::Paused,
 
             (RegulationState::Engaged, Transition::Submission) => RegulationState::Submission,
 
-            (RegulationState::Engaged, Transition::TimeExpire) | (RegulationState::NotEngaged, Transition::TimeExpire) => {
-                RegulationState::Overtime
-            }
+            (RegulationState::Engaged, Transition::TimeExpire)
+            | (RegulationState::NotEngaged, Transition::TimeExpire) => RegulationState::Overtime,
 
             (RegulationState::Submission, Transition::Restart) => RegulationState::Restarted,
 
@@ -237,7 +237,9 @@ impl CjjTimer {
                     self.total_non_engaged_duration += self.start_non_engaged_instant.elapsed();
                 }
                 if self.total_non_engaged_duration > self.penalty_free_duration {
-                    self.total_penalty_duration = self.total_non_engaged_duration - self.penalty_free_duration;
+                    self.total_penalty_duration =
+                        self.total_non_engaged_duration - self.penalty_free_duration;
+                    self.penalty_time_divided = self.total_penalty_duration / 2;
                 }
                 self.change_overtime(self.overtime_input(event));
             }
@@ -250,7 +252,6 @@ impl CjjTimer {
 
     fn change_overtime_state(&self, event: Transition) -> OvertimeState {
         match (self.overtime_state, event) {
-
             (OvertimeState::AdvanceOvertime, Transition::Engage) => OvertimeState::Engaged,
 
             (OvertimeState::Engaged, Transition::Separate) => OvertimeState::Escaped,
@@ -305,15 +306,15 @@ impl CjjTimer {
                         self.winner = Some(Fighter::B);
                         true
                     }
-                },
+                }
                 (Segment::Submission(_), Segment::Escape(_)) => {
                     self.winner = Some(Fighter::A);
                     true
-                },
+                }
                 (Segment::Escape(_), Segment::Submission(_)) => {
                     self.winner = Some(Fighter::B);
                     true
-                },
+                }
                 (Segment::Escape(_), Segment::Escape(_)) => {
                     if self.overtime_segments.len() >= 6 {
                         let mut a: Duration = Duration::from_secs(0);
@@ -329,6 +330,9 @@ impl CjjTimer {
                         }
                         //let a: Duration = self.overtime_segments.iter().enumerate().filter_map(|(index, value)| if index % 2 == 0 { Some(value) } else { None } ).sum();
                         //let b: Duration = self.overtime_segments.iter().enumerate().filter_map(|(index, value)| if index % 1 == 0 { Some(value) } else { None } ).sum();
+                        if a == b {
+                            return false;
+                        }
                         if a > b {
                             self.winner = Some(Fighter::B);
                         } else {
@@ -337,7 +341,7 @@ impl CjjTimer {
                         return true;
                     }
                     false
-                },
+                }
             }
         } else {
             false
@@ -345,7 +349,11 @@ impl CjjTimer {
     }
 }
 
-fn integer_edit_field(ui: &mut egui::Ui, value: &mut u64, duration: &mut Duration) -> egui::Response {
+fn integer_edit_field(
+    ui: &mut egui::Ui,
+    value: &mut u64,
+    duration: &mut Duration,
+) -> egui::Response {
     let mut tmp_value = format!("{:?}", value);
     let res = ui.text_edit_singleline(&mut tmp_value);
     if let Ok(result) = tmp_value.parse() {
@@ -402,16 +410,16 @@ impl eframe::App for CjjTimer {
             let current_non_engaged_time = match self.state {
                 RegulationState::NotEngaged => {
                     self.total_non_engaged_duration + self.start_non_engaged_instant.elapsed()
-                },
+                }
                 _ => self.total_non_engaged_duration,
             };
-            let match_stage = if
-                (current_non_engaged_time >= Duration::from_secs(0)) &&
-                (current_non_engaged_time < self.half_penalty_free_duration) {
+            let match_stage = if (current_non_engaged_time >= Duration::from_secs(0))
+                && (current_non_engaged_time < self.half_penalty_free_duration)
+            {
                 MatchStage::FirstHalfPenaltyFree
-            } else if
-                (current_non_engaged_time >= self.half_penalty_free_duration) &&
-                (current_non_engaged_time < self.penalty_free_duration) {
+            } else if (current_non_engaged_time >= self.half_penalty_free_duration)
+                && (current_non_engaged_time < self.penalty_free_duration)
+            {
                 MatchStage::SecondHalfPenaltyFree
             } else {
                 MatchStage::Penalty
@@ -427,17 +435,42 @@ impl eframe::App for CjjTimer {
                         self.change_regulation(Transition::TimeExpire);
                     }
                     ui.label("Fighters are NOT ENGAGED".to_string());
-                    ui.label(format_time("Match Time", self.total_regulation_duration + self.start_regulation_instant.elapsed()));
+                    ui.label(format_time(
+                        "Match Time",
+                        self.total_regulation_duration + self.start_regulation_instant.elapsed(),
+                    ));
                     match match_stage {
                         MatchStage::FirstHalfPenaltyFree => {
-                            ui.colored_label(egui::Color32::GREEN, format_time("1st Penalty Free Time", self.total_non_engaged_duration + self.start_non_engaged_instant.elapsed()));
-                        },
+                            ui.colored_label(
+                                egui::Color32::GREEN,
+                                format_time(
+                                    "1st Penalty Free Time",
+                                    self.total_non_engaged_duration
+                                        + self.start_non_engaged_instant.elapsed(),
+                                ),
+                            );
+                        }
                         MatchStage::SecondHalfPenaltyFree => {
-                            ui.colored_label(egui::Color32::KHAKI, format_time("2nd Penalty Free Time", self.total_non_engaged_duration + self.start_non_engaged_instant.elapsed()));
-                        },
+                            ui.colored_label(
+                                egui::Color32::KHAKI,
+                                format_time(
+                                    "2nd Penalty Free Time",
+                                    self.total_non_engaged_duration
+                                        + self.start_non_engaged_instant.elapsed(),
+                                ),
+                            );
+                        }
                         MatchStage::Penalty => {
-                            ui.colored_label(egui::Color32::RED, format_time("Penalty Time", self.total_non_engaged_duration + self.start_non_engaged_instant.elapsed() - self.penalty_free_duration));
-                        },
+                            ui.colored_label(
+                                egui::Color32::RED,
+                                format_time(
+                                    "Penalty Time",
+                                    self.total_non_engaged_duration
+                                        + self.start_non_engaged_instant.elapsed()
+                                        - self.penalty_free_duration,
+                                ),
+                            );
+                        }
                     };
                     if ui.button("Engaged").clicked() {
                         self.change_regulation(Transition::Engage);
@@ -457,17 +490,38 @@ impl eframe::App for CjjTimer {
                         self.change_regulation(Transition::TimeExpire);
                     }
                     ui.label("Fighters are ENGAGED".to_string());
-                    ui.label(format_time("Match Time", self.total_regulation_duration + self.start_regulation_instant.elapsed()));
+                    ui.label(format_time(
+                        "Match Time",
+                        self.total_regulation_duration + self.start_regulation_instant.elapsed(),
+                    ));
                     match match_stage {
                         MatchStage::FirstHalfPenaltyFree => {
-                            ui.colored_label(egui::Color32::GREEN, format_time("1st Penalty Free Time", self.total_non_engaged_duration));
-                        },
+                            ui.colored_label(
+                                egui::Color32::GREEN,
+                                format_time(
+                                    "1st Penalty Free Time",
+                                    self.total_non_engaged_duration,
+                                ),
+                            );
+                        }
                         MatchStage::SecondHalfPenaltyFree => {
-                            ui.colored_label(egui::Color32::KHAKI, format_time("2nd Penalty Free Time", self.total_non_engaged_duration));
-                        },
+                            ui.colored_label(
+                                egui::Color32::KHAKI,
+                                format_time(
+                                    "2nd Penalty Free Time",
+                                    self.total_non_engaged_duration,
+                                ),
+                            );
+                        }
                         MatchStage::Penalty => {
-                            ui.colored_label(egui::Color32::RED, format_time("Penalty Time", self.total_non_engaged_duration - self.penalty_free_duration));
-                        },
+                            ui.colored_label(
+                                egui::Color32::RED,
+                                format_time(
+                                    "Penalty Time",
+                                    self.total_non_engaged_duration - self.penalty_free_duration,
+                                ),
+                            );
+                        }
                     };
                     if ui.button("Not Engaged").clicked() {
                         self.change_regulation(Transition::Separate);
@@ -499,12 +553,15 @@ impl eframe::App for CjjTimer {
                                 self.start_overtime_instant = Instant::now();
                                 self.change_overtime(Transition::Engage);
                             }
-                        },
+                        }
                         OvertimeState::Engaged => {
                             ui.label("Fighters are Engaged");
-                            let current_ot = self.total_overtime_duration + self.start_overtime_instant.elapsed();
-                            let calculated_ot = self.penalty_time_divided + self.standard_overtime_duration;
-                            ui.label(format_time("Overtime Time", current_ot));
+                            let current_ot = self.total_overtime_duration
+                                + self.start_overtime_instant.elapsed();
+                            let calculated_ot =
+                                self.penalty_time_divided + self.standard_overtime_duration;
+                            ui.label(format_time("Segment Time", calculated_ot));
+                            ui.label(format_time("Current Time", current_ot));
                             if current_ot >= calculated_ot {
                                 self.overtime_segments.push(Segment::Escape(calculated_ot));
                                 if self.calculate_win() {
@@ -515,7 +572,10 @@ impl eframe::App for CjjTimer {
                             }
                             if ui.button("Escape").clicked() {
                                 // addressing = 2 * element + segment
-                                self.overtime_segments.push(Segment::Escape(self.total_overtime_duration + self.start_overtime_instant.elapsed()));
+                                self.overtime_segments.push(Segment::Escape(
+                                    self.total_overtime_duration
+                                        + self.start_overtime_instant.elapsed(),
+                                ));
                                 if self.calculate_win() {
                                     self.change_overtime(Transition::Win);
                                 } else {
@@ -523,7 +583,10 @@ impl eframe::App for CjjTimer {
                                 }
                             }
                             if ui.button("Submission").clicked() {
-                                self.overtime_segments.push(Segment::Submission(self.total_overtime_duration + self.start_overtime_instant.elapsed()));
+                                self.overtime_segments.push(Segment::Submission(
+                                    self.total_overtime_duration
+                                        + self.start_overtime_instant.elapsed(),
+                                ));
                                 if self.calculate_win() {
                                     self.change_overtime(Transition::Win);
                                 } else {
@@ -533,38 +596,40 @@ impl eframe::App for CjjTimer {
                             if ui.button("Pause").clicked() {
                                 self.change_overtime(Transition::Pause);
                             }
-                        },
+                        }
                         OvertimeState::Escaped => {
                             ui.label("Fighters Escaped");
                             ui.label(format!("Rounds: {:?}", self.overtime_segments));
                             if ui.button("Advance Round").clicked() {
                                 self.change_overtime(Transition::TimeExpire);
                             }
-                        },
+                        }
                         OvertimeState::Submission => {
                             ui.label("Fighter Submission");
                             ui.label(format!("Rounds: {:?}", self.overtime_segments));
                             if ui.button("Advance Round").clicked() {
                                 self.change_overtime(Transition::TimeExpire);
                             }
-                        },
+                        }
                         OvertimeState::Paused => {
                             ui.label("Match is in Overtime Paused");
                             if ui.button("Engage").clicked() {
                                 self.change_overtime(Transition::Engage);
                             }
-                        },
+                        }
                         OvertimeState::Win => {
                             ui.label("First round offensive is A".to_string());
                             ui.label("First round defensive is B".to_string());
-                            for (i, segment) in self.overtime_segments.iter().enumerate() {
-
-                                let fighter = if i % 2 == 0 { Fighter::A } else { Fighter::B };
-                                ui.label(format!("Fighter {:?} in overtime segment {} was {:?}", fighter, i, segment));
-                            }
                             ui.separator();
-                            ui.label(format!("The Winner is: {:?}", self.winner.as_ref().unwrap()));
-                        },
+                            ui.label(format!(
+                                "The Winner is: {:?}",
+                                self.winner.as_ref().unwrap()
+                            ));
+                            for (i, segment) in self.overtime_segments.iter().enumerate() {
+                                let fighter = if i % 2 == 0 { Fighter::A } else { Fighter::B };
+                                ui.label(format!("{:?}{}: {:?}", fighter, i, segment));
+                            }
+                        }
                     };
                 }
                 RegulationState::Restarted => {
@@ -580,10 +645,21 @@ impl eframe::App for CjjTimer {
                     }
                 }
                 RegulationState::None => {
-                    integer_edit_field(ui, &mut self.regulation_input, &mut self.regulation_duration);
-                    integer_edit_field(ui, &mut self.penalty_free_input, &mut self.penalty_free_duration);
+                    integer_edit_field(
+                        ui,
+                        &mut self.regulation_input,
+                        &mut self.regulation_duration,
+                    );
+                    integer_edit_field(
+                        ui,
+                        &mut self.penalty_free_input,
+                        &mut self.penalty_free_duration,
+                    );
                     ui.label(format_time("Match Time", self.regulation_duration));
-                    ui.label(format_time("Penalty Free Time", self.total_penalty_duration));
+                    ui.label(format_time(
+                        "Penalty Free Time",
+                        self.total_penalty_duration,
+                    ));
                     if ui.button("Start").clicked() {
                         self.change_regulation(Transition::StartRegulation);
                     }
