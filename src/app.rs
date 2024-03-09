@@ -45,6 +45,8 @@ pub struct CjjTimer {
     #[serde(skip)]
     standard_overtime_duration: Duration,
     #[serde(skip)]
+    standard_overtime_input: u64,
+    #[serde(skip)]
     over_time: bool,
     #[serde(skip)]
     state: RegulationState,
@@ -79,6 +81,7 @@ impl Default for CjjTimer {
             start_overtime_instant: Instant::now(),
             half_penalty_free_duration: Duration::from_secs(HPFT),
             standard_overtime_duration: Duration::from_secs(SOT),
+            standard_overtime_input: SOT,
             over_time: false,
             state: RegulationState::None,
             overtime_state: OvertimeState::AdvanceOvertime,
@@ -646,16 +649,23 @@ impl eframe::App for CjjTimer {
                     }
                 }
                 RegulationState::None => {
+                    ui.label("Match Time as seconds".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.regulation_input,
                         &mut self.regulation_duration,
                     );
-                    ui.label("as seconds".to_string());
+                    ui.label("Penalty Free Duration as seconds".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.penalty_free_input,
                         &mut self.penalty_free_duration,
+                    );
+                    ui.label("Default Overtime Duration as seconds".to_string());
+                    integer_edit_field(
+                        ui,
+                        &mut self.standard_overtime_input,
+                        &mut self.standard_overtime_duration,
                     );
                     ui.label("as seconds".to_string());
                     ui.separator();
@@ -663,6 +673,10 @@ impl eframe::App for CjjTimer {
                     ui.label(format_time(
                         "Penalty Free Duration",
                         self.penalty_free_duration,
+                    ));
+                    ui.label(format_time(
+                        "Standard Overtime Duration",
+                        self.standard_overtime_duration,
                     ));
                     if ui.button("Start").clicked() {
                         self.change_regulation(Transition::StartRegulation);
