@@ -431,10 +431,7 @@ impl eframe::App for CjjTimer {
                         self.change_regulation(Transition::TimeExpire);
                     }
                     ui.label("Fighters are NOT ENGAGED".to_string());
-                    ui.label(format_time(
-                        "Match Time",
-                        self.regulation_duration,
-                    ));
+                    ui.label(format_time("Match Time", self.regulation_duration));
                     ui.label(format_time(
                         "Current Time",
                         self.total_regulation_duration + self.start_regulation_instant.elapsed(),
@@ -490,10 +487,7 @@ impl eframe::App for CjjTimer {
                         self.change_regulation(Transition::TimeExpire);
                     }
                     ui.label("Fighters are ENGAGED".to_string());
-                    ui.label(format_time(
-                        "Match Time",
-                        self.regulation_duration,
-                    ));
+                    ui.label(format_time("Match Time", self.regulation_duration));
                     ui.label(format_time(
                         "Current Time",
                         self.total_regulation_duration + self.start_regulation_instant.elapsed(),
