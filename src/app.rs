@@ -1,10 +1,13 @@
 use web_time::{Duration, Instant};
 
 const MT: u64 = 600;
+//const MT: u64 = 10;
 const PFT: u64 = 90;
+//const PFT: u64 = 5;
 const OT_ROUNDS: u32 = 6;
 const HPFT: u64 = PFT / 2;
 const SOT: u64 = 120;
+//const SOT: u64 = 20;
 
 #[derive(PartialEq)]
 enum MatchStage {
@@ -132,6 +135,7 @@ enum Transition {
     Separate,
     TimeExpire,
     Submission,
+    Undo,
     Win,
 }
 
@@ -166,6 +170,7 @@ impl CjjTimer {
             | (RegulationState::NotEngaged, Transition::TimeExpire) => RegulationState::Overtime,
 
             (RegulationState::Submission, Transition::Restart) => RegulationState::Restarted,
+            (RegulationState::Submission, Transition::Undo) => RegulationState::NotEngaged,
 
             _ => RegulationState::None,
         }
@@ -204,8 +209,9 @@ impl CjjTimer {
                 self.half_penalty_free_duration = Duration::from_secs(self.penalty_free_input / 2);
             }
             RegulationState::NotEngaged => {
-                if RegulationState::Paused != self.state {
-                    self.total_regulation_duration += self.start_regulation_instant.elapsed();
+                match self.state {
+                    RegulationState::Paused | RegulationState::Submission => {}
+                    _ => self.total_regulation_duration += self.start_regulation_instant.elapsed(),
                 }
                 self.start_regulation_instant = Instant::now();
                 self.start_non_engaged_instant = Instant::now();
@@ -242,13 +248,19 @@ impl CjjTimer {
                 self.change_overtime(self.overtime_input(event));
             }
             RegulationState::Restarted => {}
-            RegulationState::Submission => {}
+            RegulationState::Submission => {
+                if RegulationState::Engaged == self.state {
+                    self.total_regulation_duration += self.start_regulation_instant.elapsed();
+                    self.start_non_engaged_instant = Instant::now();
+                    self.start_regulation_instant = Instant::now();
+                }
+            }
             RegulationState::None => {}
         }
         self.state = new_state;
     }
 
-    fn change_overtime_state(&self, event: Transition) -> OvertimeState {
+    fn change_overtime_state(&mut self, event: Transition) -> OvertimeState {
         match (self.overtime_state, event) {
             (OvertimeState::AdvanceOvertime, Transition::Engage) => OvertimeState::Engaged,
 
@@ -264,6 +276,19 @@ impl CjjTimer {
 
             (OvertimeState::Paused, Transition::Engage) => OvertimeState::Engaged,
 
+            (OvertimeState::Escaped, Transition::Undo) => {
+                self.overtime_segments.pop();
+                OvertimeState::Engaged
+            }
+            (OvertimeState::Submission, Transition::Undo) => {
+                self.overtime_segments.pop();
+                OvertimeState::Engaged
+            }
+            (OvertimeState::Win, Transition::Undo) => {
+                self.overtime_segments.pop();
+                OvertimeState::Engaged
+            }
+
             _ => OvertimeState::AdvanceOvertime,
         }
     }
@@ -275,8 +300,14 @@ impl CjjTimer {
         let new_state = self.change_overtime_state(self.overtime_input(event));
         match new_state {
             OvertimeState::Engaged => {
-                if OvertimeState::Paused != self.overtime_state {
-                    self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                match self.overtime_state {
+                    OvertimeState::Paused
+                    | OvertimeState::Submission
+                    | OvertimeState::Escaped
+                    | OvertimeState::Win => {}
+                    _ => {
+                        self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                    }
                 }
                 self.start_overtime_instant = Instant::now();
             }
@@ -287,9 +318,24 @@ impl CjjTimer {
                 }
             }
             OvertimeState::AdvanceOvertime => {}
-            OvertimeState::Submission => {}
-            OvertimeState::Escaped => {}
-            OvertimeState::Win => {}
+            OvertimeState::Submission => {
+                if OvertimeState::Engaged == self.overtime_state {
+                    self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                    self.start_overtime_instant = Instant::now();
+                }
+            }
+            OvertimeState::Escaped => {
+                if OvertimeState::Engaged == self.overtime_state {
+                    self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                    self.start_overtime_instant = Instant::now();
+                }
+            }
+            OvertimeState::Win => {
+                if OvertimeState::Engaged == self.overtime_state {
+                    self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                    self.start_overtime_instant = Instant::now();
+                }
+            }
         }
         self.overtime_state = new_state;
     }
@@ -604,6 +650,9 @@ impl eframe::App for CjjTimer {
                         OvertimeState::Escaped => {
                             ui.label("Fighters Escaped");
                             ui.label(format!("Rounds: {:?}", self.overtime_segments));
+                            if ui.button("Undo then Engage").clicked() {
+                                self.change_overtime(Transition::Undo);
+                            }
                             if ui.button("Advance Round").clicked() {
                                 self.change_overtime(Transition::TimeExpire);
                             }
@@ -611,6 +660,9 @@ impl eframe::App for CjjTimer {
                         OvertimeState::Submission => {
                             ui.label("Fighter Submission");
                             ui.label(format!("Rounds: {:?}", self.overtime_segments));
+                            if ui.button("Undo then Engage").clicked() {
+                                self.change_overtime(Transition::Undo);
+                            }
                             if ui.button("Advance Round").clicked() {
                                 self.change_overtime(Transition::TimeExpire);
                             }
@@ -624,6 +676,10 @@ impl eframe::App for CjjTimer {
                         OvertimeState::Win => {
                             ui.label("First round offensive is A".to_string());
                             ui.label("First round defensive is B".to_string());
+                            ui.separator();
+                            if ui.button("Undo then Engage").clicked() {
+                                self.change_overtime(Transition::Undo);
+                            }
                             ui.separator();
                             ui.label(format!(
                                 "The Winner is: {:?}",
@@ -644,6 +700,9 @@ impl eframe::App for CjjTimer {
                 }
                 RegulationState::Submission => {
                     ui.label("Match ended in SUBMISSION".to_string());
+                    if ui.button("Undo").clicked() {
+                        self.change_regulation(Transition::Undo);
+                    }
                     if ui.button("Restart").clicked() {
                         self.change_regulation(Transition::Restart);
                     }
