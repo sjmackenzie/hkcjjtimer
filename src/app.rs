@@ -708,27 +708,29 @@ impl eframe::App for CjjTimer {
                     }
                 }
                 RegulationState::None => {
-                    ui.label("Match Time as seconds".to_string());
+                    ui.label("Regulation Match Time as seconds:".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.regulation_input,
                         &mut self.regulation_duration,
                     );
-                    ui.label("Penalty Free Duration as seconds".to_string());
+                    ui.label("Penalty Free Duration as seconds:".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.penalty_free_input,
                         &mut self.penalty_free_duration,
                     );
-                    ui.label("Default Overtime Duration as seconds".to_string());
+                    ui.label("Standard Overtime Duration as seconds:".to_string());
                     integer_edit_field(
                         ui,
                         &mut self.standard_overtime_input,
                         &mut self.standard_overtime_duration,
                     );
-                    ui.label("as seconds".to_string());
                     ui.separator();
-                    ui.label(format_time("Match Time", self.regulation_duration));
+                    ui.label(format_time(
+                        "Regulation Match Time",
+                        self.regulation_duration,
+                    ));
                     ui.label(format_time(
                         "Penalty Free Duration",
                         self.penalty_free_duration,
