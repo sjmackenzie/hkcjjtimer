@@ -1,9 +1,9 @@
 use web_time::{Duration, Instant};
 
-const MT: u64 = 10;
-const PFT: u64 = MT / 2;
+const MT: u64 = 600;
+const PFT: u64 = 90;
 const HPFT: u64 = PFT / 2;
-const SOT: u64 = 10;
+const SOT: u64 = 120;
 
 #[derive(PartialEq)]
 enum MatchStage {
@@ -271,7 +271,9 @@ impl CjjTimer {
         let new_state = self.change_overtime_state(self.overtime_input(event));
         match new_state {
             OvertimeState::Engaged => {
-                self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                if OvertimeState::Paused != self.overtime_state {
+                    self.total_overtime_duration += self.start_overtime_instant.elapsed();
+                }
                 self.start_overtime_instant = Instant::now();
             }
             OvertimeState::Paused => {
@@ -431,6 +433,10 @@ impl eframe::App for CjjTimer {
                     ui.label("Fighters are NOT ENGAGED".to_string());
                     ui.label(format_time(
                         "Match Time",
+                        self.regulation_duration,
+                    ));
+                    ui.label(format_time(
+                        "Current Time",
                         self.total_regulation_duration + self.start_regulation_instant.elapsed(),
                     ));
                     match match_stage {
@@ -486,6 +492,10 @@ impl eframe::App for CjjTimer {
                     ui.label("Fighters are ENGAGED".to_string());
                     ui.label(format_time(
                         "Match Time",
+                        self.regulation_duration,
+                    ));
+                    ui.label(format_time(
+                        "Current Time",
                         self.total_regulation_duration + self.start_regulation_instant.elapsed(),
                     ));
                     match match_stage {
@@ -587,9 +597,11 @@ impl eframe::App for CjjTimer {
                                     self.change_overtime(Transition::Submission);
                                 }
                             }
-                            if ui.button("Pause").clicked() {
-                                self.change_overtime(Transition::Pause);
-                            }
+                            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                                if ui.button("Pause").clicked() {
+                                    self.change_overtime(Transition::Pause);
+                                }
+                            });
                         }
                         OvertimeState::Escaped => {
                             ui.label("Fighters Escaped");
