@@ -2,6 +2,7 @@ use web_time::{Duration, Instant};
 
 const MT: u64 = 600;
 const PFT: u64 = 90;
+const OT_ROUNDS: u32 = 6;
 const HPFT: u64 = PFT / 2;
 const SOT: u64 = 120;
 
@@ -233,7 +234,7 @@ impl CjjTimer {
                 if self.total_non_engaged_duration > self.penalty_free_duration {
                     self.total_penalty_duration =
                         self.total_non_engaged_duration - self.penalty_free_duration;
-                    self.penalty_time_divided = self.total_penalty_duration / 2;
+                    self.penalty_time_divided = self.total_penalty_duration / OT_ROUNDS;
                 }
                 self.change_overtime(self.overtime_input(event));
             }
